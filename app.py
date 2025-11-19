@@ -19,6 +19,7 @@ FAISS_INDEX_PATH = "faiss_index"
 
 # 初始化全局变量
 qa_chain = None
+_initialized = False
 
 
 def initialize_qa_chain():
@@ -95,11 +96,16 @@ def health():
 def ask():
     """问答端点"""
     try:
+        # 确保系统已初始化
+        ensure_initialized()
+        
         # 检查 QA chain 是否初始化
         if qa_chain is None:
             return jsonify({
-                "error": "QA 系统未初始化"
-            }), 500
+                "error": "QA 系统未初始化",
+                "message": "知识库初始化失败，请检查配置",
+                "suggestion": "请确保 OPENAI_API_KEY 已正确配置"
+            }), 503
         
         # 获取问题
         data = request.get_json()
@@ -161,6 +167,30 @@ def info():
             }
         }
     })
+
+
+def ensure_initialized():
+    """确保系统已初始化（只执行一次）"""
+    global _initialized
+    if _initialized:
+        return
+    
+    print("🚀 正在初始化 RAG 问答系统...")
+    
+    if not OPENAI_API_KEY:
+        print("⚠️ 警告: 未设置 OPENAI_API_KEY 环境变量")
+        _initialized = True
+        return
+    
+    # 创建索引
+    create_sample_index_if_needed()
+    
+    # 初始化 QA chain
+    if os.path.exists(FAISS_INDEX_PATH):
+        initialize_qa_chain()
+    
+    _initialized = True
+    print("✅ RAG 问答系统初始化完成")
 
 
 def create_sample_index_if_needed():

@@ -5,7 +5,8 @@ RAG (Retrieval-Augmented Generation) Flask 应用
 import os
 from flask import Flask, request, jsonify
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.llms import OpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import CharacterTextSplitter
@@ -40,8 +41,7 @@ def initialize_qa_chain():
         )
         
         # 初始化 LLM
-        llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
+        llm = OpenAI(
             temperature=0.7,
             openai_api_key=OPENAI_API_KEY
         )

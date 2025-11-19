@@ -229,15 +229,16 @@ def ask():
         }), 500
 
 
+# 模块加载时立即初始化（Gunicorn 也会执行）
+try:
+    initialize_qa_system()
+except Exception as e:
+    print(f"\n初始化失败: {str(e)}")
+    print("容器将启动但 QA 功能不可用\n")
+
+
 if __name__ == '__main__':
-    # 启动时立即初始化
-    try:
-        initialize_qa_system()
-    except Exception as e:
-        print(f"\n❌ 初始化失败: {str(e)}")
-        print("⚠️  容器将启动但 QA 功能不可用\n")
-    
-    # 启动 Flask 应用
+    # 启动 Flask 应用（仅用于本地测试）
     port = int(os.getenv('PORT', 8080))
-    print(f"🌐 启动 Flask 服务器，端口: {port}")
+    print(f"启动 Flask 服务器，端口: {port}")
     app.run(host='0.0.0.0', port=port, debug=False)

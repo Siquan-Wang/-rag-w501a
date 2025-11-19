@@ -92,6 +92,18 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route('/status')
+def status():
+    """系统状态检查端点"""
+    return jsonify({
+        "initialized": _initialized,
+        "qa_chain_ready": qa_chain is not None,
+        "openai_api_key_set": OPENAI_API_KEY is not None and OPENAI_API_KEY != "",
+        "faiss_index_exists": os.path.exists(FAISS_INDEX_PATH),
+        "data_file_exists": os.path.exists("data.txt")
+    })
+
+
 @app.route('/ask', methods=['POST'])
 def ask():
     """问答端点"""

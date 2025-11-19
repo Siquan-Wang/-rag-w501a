@@ -1,0 +1,124 @@
+RAG (Retrieval-Augmented Generation) 问答系统
+
+什么是 RAG？
+RAG 是一种结合了检索和生成的AI技术。它首先从知识库中检索相关信息，然后使用大语言模型基于检索到的信息生成回答。这种方法可以显著提高回答的准确性和可靠性。
+
+RAG 的核心组件
+1. 文档加载器（Document Loader）：负责加载各种格式的文档
+2. 文本分割器（Text Splitter）：将长文档分割成适当大小的文本块
+3. 向量数据库（Vector Store）：存储文档的向量表示，支持相似性搜索
+4. 嵌入模型（Embeddings）：将文本转换为向量表示
+5. 检索器（Retriever）：从向量数据库中检索相关文档
+6. 大语言模型（LLM）：基于检索到的上下文生成回答
+
+本项目使用的技术栈
+- LangChain：用于构建 RAG 应用的框架
+- FAISS：Facebook AI 开发的高效向量搜索库
+- OpenAI GPT-3.5-turbo：用于生成回答的大语言模型
+- Flask：轻量级 Web 框架，提供 API 接口
+
+项目部署架构
+本项目采用现代化的云原生部署架构：
+1. Docker 容器化：应用打包为 Docker 镜像
+2. AWS ECR：存储 Docker 镜像
+3. AWS App Runner：无服务器容器部署服务
+4. Terraform：基础设施即代码，自动化创建云资源
+5. GitHub Actions：CI/CD 自动化部署流水线
+6. Cloudflare：提供 CDN 和域名管理服务
+
+DevOps 最佳实践
+本项目展示了多个 DevOps 最佳实践：
+- 基础设施即代码（IaC）：使用 Terraform 管理云资源
+- 容器化：使用 Docker 确保环境一致性
+- CI/CD 自动化：通过 GitHub Actions 实现持续集成和部署
+- 安全管理：使用 AWS Secrets Manager 管理敏感信息
+- OIDC 认证：使用 OpenID Connect 实现无密钥的安全认证
+
+GitHub Actions OIDC
+OIDC (OpenID Connect) 是一种基于 OAuth 2.0 的身份认证协议。使用 OIDC，GitHub Actions 可以直接向 AWS 请求临时访问凭证，而不需要在仓库中存储长期有效的 AWS 访问密钥。这大大提高了安全性。
+
+AWS App Runner 的优势
+AWS App Runner 是一个全托管的容器化应用部署服务，具有以下优势：
+1. 自动扩展：根据流量自动调整容器数量
+2. 零配置：无需管理服务器或 Kubernetes 集群
+3. 内置负载均衡：自动分配流量
+4. HTTPS 支持：自动提供 SSL/TLS 证书
+5. 健康检查：自动监控应用健康状态
+6. 快速部署：从代码到生产环境只需几分钟
+
+Terraform 的作用
+Terraform 是一个基础设施即代码工具，允许你使用声明式配置文件来定义和管理云资源。在本项目中，Terraform 负责创建：
+- ECR 仓库：存储 Docker 镜像
+- IAM 角色：管理权限
+- Secrets Manager：存储 API 密钥
+- App Runner 服务：运行应用容器
+
+使用本系统
+本系统提供了简单的 REST API 接口：
+- POST /ask：提交问题并获取回答
+- GET /：健康检查
+- GET /health：系统状态
+- GET /info：系统信息
+
+示例请求：
+```json
+{
+  "question": "什么是 RAG？"
+}
+```
+
+示例响应：
+```json
+{
+  "question": "什么是 RAG？",
+  "answer": "RAG 是一种结合了检索和生成的AI技术...",
+  "sources": [...]
+}
+```
+
+学习资源
+如果你想深入学习相关技术，推荐以下资源：
+- LangChain 官方文档：https://python.langchain.com/
+- AWS 官方文档：https://docs.aws.amazon.com/
+- Terraform 教程：https://developer.hashicorp.com/terraform/tutorials
+- GitHub Actions 文档：https://docs.github.com/en/actions
+- Docker 文档：https://docs.docker.com/
+
+常见问题
+Q: 为什么选择 FAISS 而不是其他向量数据库？
+A: FAISS 是一个高效的向量搜索库，特别适合中小规模的应用。它可以直接嵌入应用中，无需单独部署数据库服务。
+
+Q: 如何更新知识库？
+A: 更新 data.txt 文件后，重新运行 ingest.py 脚本即可重新生成向量索引。
+
+Q: 如何控制成本？
+A: 可以通过以下方式控制成本：
+1. 不使用时删除 App Runner 服务
+2. 使用 OpenAI 的较小模型
+3. 减少向量检索的文档数量
+4. 设置 App Runner 的最小实例数为 1
+
+Q: 支持哪些文档格式？
+A: 目前支持纯文本格式。如需支持 PDF、Word 等格式，可以使用 LangChain 提供的其他文档加载器。
+
+贡献和反馈
+这是一个教学项目，欢迎提出问题和建议。通过这个项目，你可以学习到：
+- 如何构建生产级的 AI 应用
+- 如何实现完整的 CI/CD 流程
+- 如何使用云原生技术部署应用
+- 如何应用 DevOps 最佳实践
+
+项目路线图
+未来可能的改进方向：
+1. 支持多种文档格式（PDF、Word、网页等）
+2. 添加用户界面（Web UI）
+3. 支持对话历史
+4. 实现多租户支持
+5. 添加监控和日志分析
+6. 支持更多的向量数据库（如 Pinecone、Weaviate）
+7. 添加用户认证和授权
+8. 实现缓存机制提高性能
+
+总结
+本项目展示了一个完整的、可用于生产环境的 RAG 应用开发和部署流程。通过学习本项目，你将掌握现代化的 AI 应用开发和 DevOps 实践。
+

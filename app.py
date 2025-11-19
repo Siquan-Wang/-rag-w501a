@@ -207,7 +207,10 @@ def ensure_initialized():
 
 def create_sample_index_if_needed():
     """如果索引不存在，创建一个示例索引"""
-    if os.path.exists(FAISS_INDEX_PATH):
+    # 检查索引文件是否存在（而不是目录）
+    index_file = os.path.join(FAISS_INDEX_PATH, "index.faiss")
+    if os.path.exists(index_file):
+        print(f"✅ FAISS 索引已存在: {index_file}")
         return
     
     try:

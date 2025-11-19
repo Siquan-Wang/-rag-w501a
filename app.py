@@ -101,8 +101,7 @@ def initialize_qa_system():
         embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
         vectorstore = FAISS.load_local(
             FAISS_INDEX_PATH,
-            embeddings,
-            allow_dangerous_deserialization=True
+            embeddings
         )
     else:
         print("📦 FAISS 索引不存在，创建新索引...")

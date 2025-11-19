@@ -9,7 +9,7 @@ on:
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  APP_RUNNER_ARN: ${{ secrets.APP_RUNNER_ARN }}
+  APP_RUNNER_SERVICE_NAME: bee-edu-rag-app-service
 
 permissions:
   id-token: write
@@ -50,25 +50,14 @@ jobs:
           
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Verify APP_RUNNER_ARN format
+      - name: Get IAM Role ARNs from Terraform outputs
+        id: get-roles
         run: |
-          if [[ ! "${{ env.APP_RUNNER_ARN }}" =~ ^arn:aws:apprunner: ]]; then
-            echo "Error: APP_RUNNER_ARN must be a valid ARN (not URL or name)"
-            echo "Expected format: arn:aws:apprunner:region:account-id:service/service-name/service-id"
-            echo "Got: ${{ env.APP_RUNNER_ARN }}"
-            exit 1
-          fi
-
-      - name: Get App Runner service details
-        id: get-service-info
-        run: |
-          SERVICE_ARN="${{ env.APP_RUNNER_ARN }}"
+          cd ${{ github.workspace }}
           
-          echo "Fetching service details for: $SERVICE_ARN"
-          SERVICE_INFO=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --region ${{ env.AWS_REGION }})
-          
-          ACCESS_ROLE_ARN=$(echo "$SERVICE_INFO" | jq -r '.Service.SourceConfiguration.AuthenticationConfiguration.AccessRoleArn')
-          INSTANCE_ROLE_ARN=$(echo "$SERVICE_INFO" | jq -r '.Service.InstanceConfiguration.InstanceRoleArn')
+          # Get role ARNs (these were created by Terraform)
+          ACCESS_ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bee-edu-rag-app-apprunner-access-role"
+          INSTANCE_ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bee-edu-rag-app-apprunner-instance-role"
           
           echo "ACCESS_ROLE_ARN=$ACCESS_ROLE_ARN" >> $GITHUB_OUTPUT
           echo "INSTANCE_ROLE_ARN=$INSTANCE_ROLE_ARN" >> $GITHUB_OUTPUT
@@ -80,11 +69,17 @@ jobs:
         id: deploy-apprunner
         uses: awslabs/amazon-app-runner-deploy@main
         with:
-          service: ${{ env.APP_RUNNER_ARN }}
+          service: ${{ env.APP_RUNNER_SERVICE_NAME }}
           image: ${{ steps.build-image.outputs.IMAGE_URI }}
-          source-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
-          access-role-arn: ${{ steps.get-service-info.outputs.ACCESS_ROLE_ARN }}
-          instance-role-arn: ${{ steps.get-service-info.outputs.INSTANCE_ROLE_ARN }}
+          access-role-arn: ${{ steps.get-roles.outputs.ACCESS_ROLE_ARN }}
+          instance-role-arn: ${{ steps.get-roles.outputs.INSTANCE_ROLE_ARN }}
+          runtime-environment-secrets: |
+            [
+              {
+                "name": "OPENAI_API_KEY",
+                "value": "arn:aws:secretsmanager:us-east-1:500981865363:secret:bee-edu-rag-app-openai-api-key-foGXKQ"
+              }
+            ]
           region: ${{ env.AWS_REGION }}
           cpu: 1
           memory: 2

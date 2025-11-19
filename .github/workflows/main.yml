@@ -106,14 +106,12 @@ jobs:
           echo "SERVICE_ARN=$SERVICE_ARN" >> $GITHUB_OUTPUT
           echo "✅ Service ARN: $SERVICE_ARN"
           
-          # Wait for service to be running
-          echo "⏳ Waiting for service to be running..."
-          aws apprunner wait service-running --service-arn "$SERVICE_ARN" --region ${{ env.AWS_REGION }}
-          
-          # Get service URL
+          # Get service URL (service will continue deploying in background)
+          echo "📡 Getting service URL..."
           SERVICE_URL=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --region ${{ env.AWS_REGION }} --query 'Service.ServiceUrl' --output text)
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
           echo "✅ Service URL: https://$SERVICE_URL"
+          echo "⏳ Note: Service is deploying in the background. It may take 2-3 minutes to be fully operational."
 
       - name: App Runner service URL
         run: |

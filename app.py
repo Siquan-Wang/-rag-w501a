@@ -8,6 +8,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.document_loaders import TextLoader
 
 app = Flask(__name__)
 
@@ -161,6 +163,55 @@ def info():
     })
 
 
+def create_sample_index_if_needed():
+    """如果索引不存在，创建一个示例索引"""
+    if os.path.exists(FAISS_INDEX_PATH):
+        return
+    
+    try:
+        print("📝 FAISS 索引不存在，正在创建示例索引...")
+        
+        # 检查 data.txt 是否存在
+        if not os.path.exists("data.txt"):
+            # 创建示例数据
+            sample_data = """人工智能（AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。
+
+机器学习是人工智能的一个子集，它使计算机能够从数据中学习并改进，而无需明确编程。
+
+深度学习是机器学习的一个子集，使用神经网络来模拟人脑的工作方式。
+
+自然语言处理（NLP）是人工智能的一个领域，专注于使计算机能够理解、解释和生成人类语言。
+
+计算机视觉是人工智能的一个领域，使计算机能够从数字图像或视频中获取高级理解。"""
+            
+            with open("data.txt", "w", encoding="utf-8") as f:
+                f.write(sample_data)
+            print("✅ 创建了示例数据文件 data.txt")
+        
+        # 加载文档
+        loader = TextLoader("data.txt", encoding="utf-8")
+        documents = loader.load()
+        
+        # 分割文档
+        text_splitter = CharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50,
+            separator="\n\n"
+        )
+        texts = text_splitter.split_documents(documents)
+        
+        # 创建向量存储
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        vectorstore = FAISS.from_documents(texts, embeddings)
+        
+        # 保存索引
+        vectorstore.save_local(FAISS_INDEX_PATH)
+        print(f"✅ FAISS 索引已创建并保存到 {FAISS_INDEX_PATH}")
+        
+    except Exception as e:
+        print(f"❌ 创建 FAISS 索引失败: {str(e)}")
+
+
 if __name__ == '__main__':
     # 启动时初始化 QA chain
     print("🚀 正在启动 RAG 问答系统...")
@@ -168,13 +219,15 @@ if __name__ == '__main__':
     # 检查 OpenAI API Key
     if not OPENAI_API_KEY:
         print("⚠️  警告: 未设置 OPENAI_API_KEY 环境变量")
-    
-    # 检查 FAISS 索引是否存在
-    if not os.path.exists(FAISS_INDEX_PATH):
-        print(f"⚠️  警告: FAISS 索引目录不存在: {FAISS_INDEX_PATH}")
-        print("请先运行 ingest.py 创建向量索引")
     else:
-        initialize_qa_chain()
+        # 如果索引不存在，创建它
+        create_sample_index_if_needed()
+        
+        # 初始化 QA chain
+        if os.path.exists(FAISS_INDEX_PATH):
+            initialize_qa_chain()
+        else:
+            print(f"⚠️  警告: FAISS 索引目录不存在: {FAISS_INDEX_PATH}")
     
     # 启动 Flask 应用
     port = int(os.getenv('PORT', 8080))

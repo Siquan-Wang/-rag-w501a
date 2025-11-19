@@ -26,19 +26,19 @@ qa_chain = None
 def create_sample_data():
     """创建示例数据文件"""
     print("📝 创建示例数据文件...")
-    sample_data = """人工智能（Artificial Intelligence，AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。人工智能包括机器学习、自然语言处理、计算机视觉等多个领域。
+    sample_data = """Artificial Intelligence (AI) is a branch of computer science dedicated to creating systems capable of performing tasks that typically require human intelligence. AI encompasses multiple fields including machine learning, natural language processing, and computer vision.
 
-机器学习（Machine Learning，ML）是人工智能的一个子集，它使计算机能够从数据中学习并改进，而无需明确编程。机器学习算法可以识别模式、做出预测和决策。
+Machine Learning (ML) is a subset of artificial intelligence that enables computers to learn from data and improve without being explicitly programmed. Machine learning algorithms can identify patterns, make predictions, and make decisions.
 
-深度学习（Deep Learning）是机器学习的一个子集，使用多层神经网络来模拟人脑的工作方式。深度学习在图像识别、语音识别和自然语言处理等领域取得了突破性进展。
+Deep Learning is a subset of machine learning that uses multi-layer neural networks to simulate how the human brain works. Deep learning has achieved breakthrough progress in areas such as image recognition, speech recognition, and natural language processing.
 
-自然语言处理（Natural Language Processing，NLP）是人工智能的一个领域，专注于使计算机能够理解、解释和生成人类语言。NLP应用包括机器翻译、情感分析和聊天机器人。
+Natural Language Processing (NLP) is a field of artificial intelligence focused on enabling computers to understand, interpret, and generate human language. NLP applications include machine translation, sentiment analysis, and chatbots.
 
-计算机视觉（Computer Vision）是人工智能的一个领域，使计算机能够从数字图像或视频中获取高级理解。计算机视觉应用包括人脸识别、自动驾驶和医学图像分析。
+Computer Vision is a field of artificial intelligence that enables computers to gain high-level understanding from digital images or videos. Computer vision applications include facial recognition, autonomous driving, and medical image analysis.
 
-神经网络（Neural Network）是一种受生物神经系统启发的计算模型，由相互连接的节点（神经元）组成。神经网络是深度学习的基础。
+Neural Networks are computational models inspired by biological nervous systems, composed of interconnected nodes (neurons). Neural networks are the foundation of deep learning.
 
-强化学习（Reinforcement Learning）是一种机器学习方法，智能体通过与环境交互来学习如何做出决策以最大化累积奖励。强化学习被用于游戏AI、机器人控制等领域。"""
+Reinforcement Learning is a machine learning method where an agent learns to make decisions by interacting with an environment to maximize cumulative rewards. Reinforcement learning is used in game AI, robot control, and other fields."""
     
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         f.write(sample_data)

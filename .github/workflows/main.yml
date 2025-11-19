@@ -50,46 +50,70 @@ jobs:
           
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Get IAM Role ARNs from Terraform outputs
-        id: get-roles
+      - name: Check if App Runner service exists
+        id: check-service
+        continue-on-error: true
         run: |
-          cd ${{ github.workspace }}
+          SERVICE_ARN=$(aws apprunner list-services --region ${{ env.AWS_REGION }} \
+            --query "ServiceSummaryList[?ServiceName=='${{ env.APP_RUNNER_SERVICE_NAME }}'].ServiceArn" \
+            --output text)
           
-          # Get role ARNs (these were created by Terraform)
+          if [ -n "$SERVICE_ARN" ]; then
+            echo "SERVICE_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "SERVICE_ARN=$SERVICE_ARN" >> $GITHUB_OUTPUT
+            echo "✅ Service exists: $SERVICE_ARN"
+          else
+            echo "SERVICE_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "📝 Service does not exist, will create new one"
+          fi
+
+      - name: Create or Update App Runner Service
+        id: deploy-apprunner
+        run: |
+          SERVICE_NAME="${{ env.APP_RUNNER_SERVICE_NAME }}"
+          IMAGE_URI="${{ steps.build-image.outputs.IMAGE_URI }}"
           ACCESS_ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bee-edu-rag-app-apprunner-access-role"
           INSTANCE_ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bee-edu-rag-app-apprunner-instance-role"
+          SECRET_ARN="arn:aws:secretsmanager:us-east-1:500981865363:secret:bee-edu-rag-app-openai-api-key-foGXKQ"
           
-          echo "ACCESS_ROLE_ARN=$ACCESS_ROLE_ARN" >> $GITHUB_OUTPUT
-          echo "INSTANCE_ROLE_ARN=$INSTANCE_ROLE_ARN" >> $GITHUB_OUTPUT
+          if [ "${{ steps.check-service.outputs.SERVICE_EXISTS }}" == "true" ]; then
+            echo "🔄 Updating existing service..."
+            aws apprunner update-service \
+              --service-arn "${{ steps.check-service.outputs.SERVICE_ARN }}" \
+              --source-configuration "ImageRepository={ImageIdentifier=$IMAGE_URI,ImageConfiguration={Port=8080,RuntimeEnvironmentSecrets={OPENAI_API_KEY=$SECRET_ARN}},ImageRepositoryType=ECR},AuthenticationConfiguration={AccessRoleArn=$ACCESS_ROLE_ARN}" \
+              --instance-configuration "Cpu=1024,Memory=2048,InstanceRoleArn=$INSTANCE_ROLE_ARN" \
+              --region ${{ env.AWS_REGION }}
+            
+            SERVICE_ARN="${{ steps.check-service.outputs.SERVICE_ARN }}"
+          else
+            echo "🆕 Creating new service..."
+            RESULT=$(aws apprunner create-service \
+              --service-name "$SERVICE_NAME" \
+              --source-configuration "ImageRepository={ImageIdentifier=$IMAGE_URI,ImageConfiguration={Port=8080,RuntimeEnvironmentSecrets={OPENAI_API_KEY=$SECRET_ARN}},ImageRepositoryType=ECR},AuthenticationConfiguration={AccessRoleArn=$ACCESS_ROLE_ARN}" \
+              --instance-configuration "Cpu=1024,Memory=2048,InstanceRoleArn=$INSTANCE_ROLE_ARN" \
+              --health-check-configuration "Protocol=HTTP,Path=/health,Interval=10,Timeout=5,HealthyThreshold=1,UnhealthyThreshold=5" \
+              --region ${{ env.AWS_REGION }} \
+              --output json)
+            
+            SERVICE_ARN=$(echo $RESULT | jq -r '.Service.ServiceArn')
+          fi
           
-          echo "✅ Access Role ARN: $ACCESS_ROLE_ARN"
-          echo "✅ Instance Role ARN: $INSTANCE_ROLE_ARN"
-
-      - name: Deploy to App Runner
-        id: deploy-apprunner
-        uses: awslabs/amazon-app-runner-deploy@main
-        with:
-          service: ${{ env.APP_RUNNER_SERVICE_NAME }}
-          image: ${{ steps.build-image.outputs.IMAGE_URI }}
-          source-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
-          access-role-arn: ${{ steps.get-roles.outputs.ACCESS_ROLE_ARN }}
-          instance-role-arn: ${{ steps.get-roles.outputs.INSTANCE_ROLE_ARN }}
-          runtime-environment-secrets: |
-            [
-              {
-                "name": "OPENAI_API_KEY",
-                "value": "arn:aws:secretsmanager:us-east-1:500981865363:secret:bee-edu-rag-app-openai-api-key-foGXKQ"
-              }
-            ]
-          region: ${{ env.AWS_REGION }}
-          cpu: 1
-          memory: 2
-          port: 8080
-          wait-for-service-stability-seconds: 600
+          echo "SERVICE_ARN=$SERVICE_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Service ARN: $SERVICE_ARN"
+          
+          # Wait for service to be running
+          echo "⏳ Waiting for service to be running..."
+          aws apprunner wait service-running --service-arn "$SERVICE_ARN" --region ${{ env.AWS_REGION }}
+          
+          # Get service URL
+          SERVICE_URL=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --region ${{ env.AWS_REGION }} --query 'Service.ServiceUrl' --output text)
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "✅ Service URL: https://$SERVICE_URL"
 
       - name: App Runner service URL
         run: |
           echo "✅ 部署成功！"
-          echo "🌐 App Runner 服务 URL: ${{ steps.deploy-apprunner.outputs.service-url }}"
+          echo "🌐 App Runner 服务 URL: https://${{ steps.deploy-apprunner.outputs.SERVICE_URL }}"
           echo "📦 镜像: ${{ steps.build-image.outputs.IMAGE_URI }}"
+          echo "🔗 ARN: ${{ steps.deploy-apprunner.outputs.SERVICE_ARN }}"
 

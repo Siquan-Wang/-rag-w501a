@@ -28,6 +28,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-deployment
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR

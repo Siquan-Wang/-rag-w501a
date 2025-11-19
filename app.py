@@ -1,6 +1,7 @@
 """
 RAG (Retrieval-Augmented Generation) Flask 应用
 使用 LangChain + FAISS + OpenAI 实现问答系统
+简化版本 - 启动时强制初始化所有组件
 """
 import os
 from flask import Flask, request, jsonify
@@ -8,7 +9,6 @@ from langchain_community.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.llms import OpenAI
 from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
 
@@ -17,90 +17,160 @@ app = Flask(__name__)
 # 配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 FAISS_INDEX_PATH = "faiss_index"
+DATA_FILE = "data.txt"
 
-# 初始化全局变量
+# 全局变量
 qa_chain = None
-_initialized = False
 
 
-def initialize_qa_chain():
-    """初始化 QA 链"""
+def create_sample_data():
+    """创建示例数据文件"""
+    print("📝 创建示例数据文件...")
+    sample_data = """人工智能（Artificial Intelligence，AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。人工智能包括机器学习、自然语言处理、计算机视觉等多个领域。
+
+机器学习（Machine Learning，ML）是人工智能的一个子集，它使计算机能够从数据中学习并改进，而无需明确编程。机器学习算法可以识别模式、做出预测和决策。
+
+深度学习（Deep Learning）是机器学习的一个子集，使用多层神经网络来模拟人脑的工作方式。深度学习在图像识别、语音识别和自然语言处理等领域取得了突破性进展。
+
+自然语言处理（Natural Language Processing，NLP）是人工智能的一个领域，专注于使计算机能够理解、解释和生成人类语言。NLP应用包括机器翻译、情感分析和聊天机器人。
+
+计算机视觉（Computer Vision）是人工智能的一个领域，使计算机能够从数字图像或视频中获取高级理解。计算机视觉应用包括人脸识别、自动驾驶和医学图像分析。
+
+神经网络（Neural Network）是一种受生物神经系统启发的计算模型，由相互连接的节点（神经元）组成。神经网络是深度学习的基础。
+
+强化学习（Reinforcement Learning）是一种机器学习方法，智能体通过与环境交互来学习如何做出决策以最大化累积奖励。强化学习被用于游戏AI、机器人控制等领域。"""
+    
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        f.write(sample_data)
+    print(f"✅ 示例数据已写入 {DATA_FILE}")
+
+
+def create_faiss_index():
+    """创建FAISS向量索引"""
+    print("🔨 创建 FAISS 向量索引...")
+    
+    # 确保数据文件存在
+    if not os.path.exists(DATA_FILE):
+        create_sample_data()
+    
+    # 加载文档
+    loader = TextLoader(DATA_FILE, encoding="utf-8")
+    documents = loader.load()
+    print(f"📄 已加载 {len(documents)} 个文档")
+    
+    # 分割文档
+    text_splitter = CharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+        separator="\n\n"
+    )
+    texts = text_splitter.split_documents(documents)
+    print(f"✂️  文档已分割为 {len(texts)} 个块")
+    
+    # 创建向量存储
+    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+    vectorstore = FAISS.from_documents(texts, embeddings)
+    print("🧮 向量嵌入已创建")
+    
+    # 保存索引
+    vectorstore.save_local(FAISS_INDEX_PATH)
+    print(f"💾 FAISS 索引已保存到 {FAISS_INDEX_PATH}")
+    
+    return vectorstore
+
+
+def initialize_qa_system():
+    """初始化问答系统"""
     global qa_chain
     
-    try:
-        # 初始化 OpenAI Embeddings
-        embeddings = OpenAIEmbeddings(
-            openai_api_key=OPENAI_API_KEY
-        )
-        
-        # 加载 FAISS 向量数据库
+    print("\n" + "="*50)
+    print("🚀 初始化 RAG 问答系统")
+    print("="*50)
+    
+    # 检查 API Key
+    if not OPENAI_API_KEY:
+        raise ValueError("❌ 错误: 未设置 OPENAI_API_KEY 环境变量")
+    
+    print(f"✅ OpenAI API Key 已设置 (长度: {len(OPENAI_API_KEY)})")
+    
+    # 检查索引是否存在
+    index_file = os.path.join(FAISS_INDEX_PATH, "index.faiss")
+    
+    if os.path.exists(index_file):
+        print(f"📦 加载现有 FAISS 索引: {index_file}")
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
         vectorstore = FAISS.load_local(
             FAISS_INDEX_PATH,
             embeddings,
             allow_dangerous_deserialization=True
         )
-        
-        # 初始化 LLM
-        llm = OpenAI(
-            temperature=0.7,
-            openai_api_key=OPENAI_API_KEY
-        )
-        
-        # 创建自定义 prompt
-        prompt_template = """使用以下上下文来回答问题。如果你不知道答案，就说不知道，不要试图编造答案。
-
-上下文: {context}
-
-问题: {question}
-
-详细回答:"""
-        
-        PROMPT = PromptTemplate(
-            template=prompt_template,
-            input_variables=["context", "question"]
-        )
-        
-        # 创建 QA 链
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            chain_type="stuff",
-            retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
-            return_source_documents=True,
-            chain_type_kwargs={"prompt": PROMPT}
-        )
-        
-        print("✅ QA Chain 初始化成功！")
-        
-    except Exception as e:
-        print(f"❌ 初始化 QA Chain 失败: {str(e)}")
-        raise
+    else:
+        print("📦 FAISS 索引不存在，创建新索引...")
+        vectorstore = create_faiss_index()
+    
+    # 初始化 LLM
+    print("🤖 初始化 OpenAI LLM...")
+    llm = OpenAI(
+        temperature=0.7,
+        openai_api_key=OPENAI_API_KEY
+    )
+    
+    # 创建 QA chain
+    print("🔗 创建检索问答链...")
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
+        return_source_documents=True
+    )
+    
+    print("✅ RAG 问答系统初始化完成！")
+    print("="*50 + "\n")
 
 
+# Flask 路由
 @app.route('/')
 def home():
-    """健康检查端点"""
+    """首页"""
     return jsonify({
-        "status": "healthy",
-        "message": "RAG 问答系统正在运行",
-        "version": "1.0.0"
+        "status": "ok",
+        "message": "RAG 问答系统运行中",
+        "endpoints": {
+            "/health": "健康检查",
+            "/ask": "问答接口 (POST)",
+            "/info": "系统信息"
+        }
     })
 
 
 @app.route('/health')
 def health():
-    """健康检查端点"""
+    """健康检查"""
     return jsonify({"status": "ok"})
 
 
-@app.route('/status')
-def status():
-    """系统状态检查端点"""
+@app.route('/info')
+def info():
+    """系统信息"""
     return jsonify({
-        "initialized": _initialized,
-        "qa_chain_ready": qa_chain is not None,
-        "openai_api_key_set": OPENAI_API_KEY is not None and OPENAI_API_KEY != "",
-        "faiss_index_exists": os.path.exists(FAISS_INDEX_PATH),
-        "data_file_exists": os.path.exists("data.txt")
+        "app": "RAG 问答系统",
+        "description": "基于 LangChain + FAISS + OpenAI 的检索增强生成系统",
+        "version": "2.0-simplified",
+        "qa_system_ready": qa_chain is not None,
+        "endpoints": {
+            "/": "首页",
+            "/health": "健康检查",
+            "/ask": "问答接口 (POST)",
+            "/info": "系统信息"
+        },
+        "usage": {
+            "method": "POST",
+            "endpoint": "/ask",
+            "body": {"question": "你的问题"},
+            "example": {
+                "question": "什么是人工智能？"
+            }
+        }
     })
 
 
@@ -108,22 +178,20 @@ def status():
 def ask():
     """问答端点"""
     try:
-        # 确保系统已初始化
-        ensure_initialized()
-        
-        # 检查 QA chain 是否初始化
+        # 检查 QA 系统是否就绪
         if qa_chain is None:
             return jsonify({
                 "error": "QA 系统未初始化",
-                "message": "知识库初始化失败，请检查配置",
-                "suggestion": "请确保 OPENAI_API_KEY 已正确配置"
+                "message": "系统启动失败，请检查日志"
             }), 503
         
         # 获取问题
         data = request.get_json()
         if not data or 'question' not in data:
             return jsonify({
-                "error": "请提供 'question' 字段"
+                "error": "缺少必需字段",
+                "message": "请在请求体中提供 'question' 字段",
+                "example": {"question": "什么是人工智能？"}
             }), 400
         
         question = data['question']
@@ -134,147 +202,43 @@ def ask():
             }), 400
         
         # 执行问答
+        print(f"❓ 收到问题: {question}")
         result = qa_chain({"query": question})
+        print(f"✅ 回答已生成")
         
         # 提取源文档
         sources = []
         if 'source_documents' in result:
-            sources = [
-                {
-                    "content": doc.page_content[:200] + "...",
-                    "metadata": doc.metadata
-                }
-                for doc in result['source_documents']
-            ]
+            for i, doc in enumerate(result['source_documents'], 1):
+                sources.append({
+                    "id": i,
+                    "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+                })
         
         return jsonify({
             "question": question,
             "answer": result['result'],
-            "sources": sources
+            "source_documents": sources,
+            "sources_count": len(sources)
         })
-    
+        
     except Exception as e:
+        print(f"❌ 错误: {str(e)}")
         return jsonify({
-            "error": f"处理问题时出错: {str(e)}"
+            "error": "处理问题时出现错误",
+            "message": str(e)
         }), 500
 
 
-@app.route('/info')
-def info():
-    """系统信息端点"""
-    return jsonify({
-        "app": "RAG 问答系统",
-        "description": "基于 LangChain + FAISS + OpenAI 的检索增强生成系统",
-        "endpoints": {
-            "/": "健康检查",
-            "/health": "健康状态",
-            "/ask": "问答接口 (POST)",
-            "/info": "系统信息"
-        },
-        "usage": {
-            "method": "POST",
-            "endpoint": "/ask",
-            "body": {
-                "question": "你的问题"
-            }
-        }
-    })
-
-
-def ensure_initialized():
-    """确保系统已初始化（只执行一次）"""
-    global _initialized
-    if _initialized:
-        return
-    
-    print("🚀 正在初始化 RAG 问答系统...")
-    
-    if not OPENAI_API_KEY:
-        print("⚠️ 警告: 未设置 OPENAI_API_KEY 环境变量")
-        _initialized = True
-        return
-    
-    # 创建索引
-    create_sample_index_if_needed()
-    
-    # 初始化 QA chain
-    if os.path.exists(FAISS_INDEX_PATH):
-        initialize_qa_chain()
-    
-    _initialized = True
-    print("✅ RAG 问答系统初始化完成")
-
-
-def create_sample_index_if_needed():
-    """如果索引不存在，创建一个示例索引"""
-    # 检查索引文件是否存在（而不是目录）
-    index_file = os.path.join(FAISS_INDEX_PATH, "index.faiss")
-    if os.path.exists(index_file):
-        print(f"✅ FAISS 索引已存在: {index_file}")
-        return
-    
-    try:
-        print("📝 FAISS 索引不存在，正在创建示例索引...")
-        
-        # 检查 data.txt 是否存在
-        if not os.path.exists("data.txt"):
-            # 创建示例数据
-            sample_data = """人工智能（AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。
-
-机器学习是人工智能的一个子集，它使计算机能够从数据中学习并改进，而无需明确编程。
-
-深度学习是机器学习的一个子集，使用神经网络来模拟人脑的工作方式。
-
-自然语言处理（NLP）是人工智能的一个领域，专注于使计算机能够理解、解释和生成人类语言。
-
-计算机视觉是人工智能的一个领域，使计算机能够从数字图像或视频中获取高级理解。"""
-            
-            with open("data.txt", "w", encoding="utf-8") as f:
-                f.write(sample_data)
-            print("✅ 创建了示例数据文件 data.txt")
-        
-        # 加载文档
-        loader = TextLoader("data.txt", encoding="utf-8")
-        documents = loader.load()
-        
-        # 分割文档
-        text_splitter = CharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=50,
-            separator="\n\n"
-        )
-        texts = text_splitter.split_documents(documents)
-        
-        # 创建向量存储
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        vectorstore = FAISS.from_documents(texts, embeddings)
-        
-        # 保存索引
-        vectorstore.save_local(FAISS_INDEX_PATH)
-        print(f"✅ FAISS 索引已创建并保存到 {FAISS_INDEX_PATH}")
-        
-    except Exception as e:
-        print(f"❌ 创建 FAISS 索引失败: {str(e)}")
-
-
 if __name__ == '__main__':
-    # 启动时初始化 QA chain
-    print("🚀 正在启动 RAG 问答系统...")
-    
-    # 检查 OpenAI API Key
-    if not OPENAI_API_KEY:
-        print("⚠️  警告: 未设置 OPENAI_API_KEY 环境变量")
-    else:
-        # 如果索引不存在，创建它
-        create_sample_index_if_needed()
-        
-        # 初始化 QA chain
-        if os.path.exists(FAISS_INDEX_PATH):
-            initialize_qa_chain()
-        else:
-            print(f"⚠️  警告: FAISS 索引目录不存在: {FAISS_INDEX_PATH}")
+    # 启动时立即初始化
+    try:
+        initialize_qa_system()
+    except Exception as e:
+        print(f"\n❌ 初始化失败: {str(e)}")
+        print("⚠️  容器将启动但 QA 功能不可用\n")
     
     # 启动 Flask 应用
     port = int(os.getenv('PORT', 8080))
+    print(f"🌐 启动 Flask 服务器，端口: {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
-

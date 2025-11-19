@@ -40,7 +40,7 @@ jobs:
         run: |
           ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
           ECR_REPO="bee-edu-rag-app"
-          IMAGE_TAG="latest"
+          IMAGE_TAG="$(echo ${{ github.sha }} | cut -c1-8)"
           
           echo "Building Docker image..."
           echo "Registry: $ECR_REGISTRY"

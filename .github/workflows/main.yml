@@ -71,6 +71,7 @@ jobs:
         with:
           service: ${{ env.APP_RUNNER_SERVICE_NAME }}
           image: ${{ steps.build-image.outputs.IMAGE_URI }}
+          source-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
           access-role-arn: ${{ steps.get-roles.outputs.ACCESS_ROLE_ARN }}
           instance-role-arn: ${{ steps.get-roles.outputs.INSTANCE_ROLE_ARN }}
           runtime-environment-secrets: |

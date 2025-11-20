@@ -4,7 +4,7 @@ RAG (Retrieval-Augmented Generation) Flask 应用
 简化版本 - 启动时强制初始化所有组件
 """
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from langchain_community.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.llms import OpenAI
@@ -12,7 +12,7 @@ from langchain.chains import RetrievalQA
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 
 # 配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -130,11 +130,18 @@ def initialize_qa_system():
 # Flask 路由
 @app.route('/')
 def home():
-    """首页"""
+    """首页 - 返回网页界面"""
+    return send_from_directory('static', 'index.html')
+
+
+@app.route('/api')
+def api_info():
+    """API 信息"""
     return jsonify({
         "status": "ok",
         "message": "RAG 问答系统运行中",
         "endpoints": {
+            "/": "网页界面",
             "/health": "健康检查",
             "/ask": "问答接口 (POST)",
             "/info": "系统信息"

@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY ingest.py .
 COPY data.txt .
+COPY static/ static/
 
 # 创建 FAISS 索引目录
 RUN mkdir -p faiss_index
